@@ -3,10 +3,23 @@ set -e
 
 export PATH="$HOME/.foundry/bin:$PATH"
 
+CONFIG_FILE="$HOME/.openclaw/skills/aavegotchi/config.json"
 LOG_FILE="$HOME/.openclaw/logs/aavegotchi-autopet.log"
-CONTRACT="0xa99c4b08201f2913db8d28e71d020c4298f29dbf"
-GOTCHI_ID="9638"
-RPC_URL="https://mainnet.base.org"
+
+# Load config
+CONTRACT=$(jq -r .contractAddress "$CONFIG_FILE")
+RPC_URL=$(jq -r .rpcUrl "$CONFIG_FILE")
+PRIVATE_KEY_PATH=$(jq -r .privateKeyPath "$CONFIG_FILE")
+
+# Expand tilde in path
+PRIVATE_KEY_PATH="${PRIVATE_KEY_PATH/#\~/$HOME}"
+
+# Get gotchi ID from argument or use first from config
+if [ -n "$1" ]; then
+  GOTCHI_ID="$1"
+else
+  GOTCHI_ID=$(jq -r .gotchiIds[0] "$CONFIG_FILE")
+fi
 
 echo "$(date): Checking if Gotchi #$GOTCHI_ID needs petting..." >> "$LOG_FILE"
 
@@ -33,7 +46,7 @@ if [ $TIME_SINCE -ge $REQUIRED_WAIT ]; then
   echo "✅ Time to pet\! Petting now..." >> "$LOG_FILE"
   
   # Load private key from encrypted storage (password cached by gpg-agent)
-  PRIVATE_KEY=$(gpg --quiet --decrypt ~/.openclaw/secrets/aavegotchi-private-key.gpg 2>/dev/null)
+  PRIVATE_KEY=$(gpg --quiet --decrypt "$PRIVATE_KEY_PATH" 2>/dev/null)
   
   if [ -z "$PRIVATE_KEY" ]; then
     echo "❌ Failed to load private key" >> "$LOG_FILE"

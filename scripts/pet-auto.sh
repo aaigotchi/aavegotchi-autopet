@@ -1,16 +1,26 @@
 #\!/bin/bash
-set -e
+# Removed set -e to allow proper error handling
 
 export PATH="$HOME/.foundry/bin:$PATH"
 
 CONFIG_FILE="$HOME/.openclaw/skills/aavegotchi/config.json"
 
-# Load private key (NO PASSWORD NEEDED)
-PRIVATE_KEY=$(gpg --quiet --decrypt ~/.openclaw/secrets/aavegotchi-private-key.gpg 2>/dev/null)
+# Load private key path from config
+PRIVATE_KEY_PATH=$(jq -r ".privateKeyPath" "$CONFIG_FILE")
 
-if [ -z "$PRIVATE_KEY" ]; then
-  echo "❌ No private key found. Add with:"
-  echo "   echo '0xYourKey' | gpg --encrypt --recipient automation@openclaw.local -o ~/.openclaw/secrets/aavegotchi-private-key.gpg"
+# Expand tilde in path
+PRIVATE_KEY_PATH="${PRIVATE_KEY_PATH/#\~/$HOME}"
+
+# Load private key (NO PASSWORD NEEDED)
+set +e
+PRIVATE_KEY=$(gpg --quiet --decrypt "$PRIVATE_KEY_PATH" 2>/dev/null)
+GPG_EXIT=$?
+set -e
+
+if [ $GPG_EXIT -ne 0 ] || [ -z "$PRIVATE_KEY" ]; then
+  echo "❌ Failed to decrypt private key from $PRIVATE_KEY_PATH"
+  echo "   Make sure the key is encrypted with:"
+  echo "   echo '0xYourKey' | gpg --encrypt --recipient automation@openclaw.local -o $PRIVATE_KEY_PATH"
   exit 1
 fi
 
