@@ -7,8 +7,14 @@ LOG_FILE="$HOME/.openclaw/logs/aavegotchi-autopet.log"
 
 # Load config
 CONTRACT=$(jq -r .contractAddress "$CONFIG_FILE")
-GOTCHI_ID=$(jq -r .gotchiId "$CONFIG_FILE")
 RPC_URL=$(jq -r .rpcUrl "$CONFIG_FILE")
+
+# Get gotchi ID from argument or use first from config
+if [ -n "$1" ]; then
+  GOTCHI_ID="$1"
+else
+  GOTCHI_ID=$(jq -r .gotchiIds[0] "$CONFIG_FILE")
+fi
 
 export PATH="$HOME/.foundry/bin:$PATH"
 

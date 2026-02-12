@@ -1,5 +1,5 @@
-#!/bin/bash
-set -e  # Exit on error, but we'll catch and log it
+#\!/bin/bash
+# Removed set -e to allow proper retry logic handling
 
 export PATH="$HOME/.foundry/bin:$PATH"
 
@@ -10,15 +10,22 @@ CONFIG_FILE="$HOME/.openclaw/skills/aavegotchi/config.json"
 CONTRACT=$(jq -r ".contractAddress" "$CONFIG_FILE")
 RPC_URL=$(jq -r ".rpcUrl" "$CONFIG_FILE")
 GOTCHI_IDS=$(jq -r ".gotchiIds[]" "$CONFIG_FILE")
+PRIVATE_KEY_PATH=$(jq -r ".privateKeyPath" "$CONFIG_FILE")
+
+# Expand tilde in path
+PRIVATE_KEY_PATH="${PRIVATE_KEY_PATH/#\~/$HOME}"
 
 echo "$(date): 🔍 Checking gotchis..." >> "$LOG_FILE"
 
 # Load private key once (NO PASSWORD - fully automated)
-PRIVATE_KEY=$(gpg --quiet --decrypt ~/.openclaw/secrets/aavegotchi-private-key.gpg 2>&1)
+# Temporarily disable errexit for this command
+set +e
+PRIVATE_KEY=$(gpg --quiet --decrypt "$PRIVATE_KEY_PATH" 2>/dev/null)
+GPG_EXIT=$?
+set -e
 
-if [ -z "$PRIVATE_KEY" ]; then
-  echo "$(date): ❌ No private key found" >> "$LOG_FILE"
-  echo "$(date): GPG Error: $PRIVATE_KEY" >> "$LOG_FILE"
+if [ $GPG_EXIT -ne 0 ] || [ -z "$PRIVATE_KEY" ]; then
+  echo "$(date): ❌ Failed to decrypt private key from $PRIVATE_KEY_PATH" >> "$LOG_FILE"
   exit 1
 fi
 
@@ -31,34 +38,44 @@ for GOTCHI_ID in $GOTCHI_IDS; do
   DATA=""
   RETRY_COUNT=0
   MAX_RETRIES=3
+  SUCCESS=false
 
   while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    DATA=$(cast call "$CONTRACT" "getAavegotchi(uint256)" "$GOTCHI_ID" --rpc-url "$RPC_URL" 2>&1)
+    # Separate stdout and stderr properly
+    set +e
+    DATA=$(cast call "$CONTRACT" "getAavegotchi(uint256)" "$GOTCHI_ID" --rpc-url "$RPC_URL" 2>/tmp/cast_error_$$)
     CAST_EXIT=$?
+    set -e
+    
+    CAST_ERROR=$(cat /tmp/cast_error_$$ 2>/dev/null || echo "")
+    rm -f /tmp/cast_error_$$
 
-    if [ $CAST_EXIT -eq 0 ] && [ -n "$DATA" ]; then
+    if [ $CAST_EXIT -eq 0 ] && [ -n "$DATA" ] && [ -z "$CAST_ERROR" ]; then
+      SUCCESS=true
       break  # Success
     fi
 
     RETRY_COUNT=$((RETRY_COUNT + 1))
     echo "  ⚠️ Retry $RETRY_COUNT/$MAX_RETRIES: cast call failed (exit $CAST_EXIT)" >> "$LOG_FILE"
+    if [ -n "$CAST_ERROR" ]; then
+      echo "  Error: $CAST_ERROR" >> "$LOG_FILE"
+    fi
 
     if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
       sleep 5  # Wait before retry
     fi
   done
 
-  if [ -z "$DATA" ]; then
+  if [ "$SUCCESS" \!= "true" ] || [ -z "$DATA" ]; then
     echo "  ❌ Failed to query gotchi after $MAX_RETRIES attempts" >> "$LOG_FILE"
-    echo "  Last error: $DATA" >> "$LOG_FILE"
     continue
   fi
 
   # Extract last pet timestamp
   LAST_PET_HEX=${DATA:2498:64}
 
-  # Validate timestamp
-  if [ -z "$LAST_PET_HEX" ] || [ "$LAST_PET_HEX" = "0000000000000000000000000000000000000000000000000000000000000000000" ]; then
+  # Validate timestamp - correct length is 64 hex characters
+  if [ -z "$LAST_PET_HEX" ] || [ "$LAST_PET_HEX" = "0000000000000000000000000000000000000000000000000000000000000000" ]; then
     echo "  ❌ Invalid last pet timestamp" >> "$LOG_FILE"
     continue
   fi
@@ -73,24 +90,26 @@ for GOTCHI_ID in $GOTCHI_IDS; do
   echo "  Time since: ${TIME_SINCE}s (need ${REQUIRED_WAIT}s)" >> "$LOG_FILE"
 
   if [ $TIME_SINCE -ge $REQUIRED_WAIT ]; then
-    echo "  ✅ Time to pet!" >> "$LOG_FILE"
+    echo "  ✅ Time to pet\!" >> "$LOG_FILE"
 
     # Pet this gotchi with error handling
-    PET_RESULT=""
     PET_RETRY_COUNT=0
     PET_MAX_RETRIES=3
+    PET_SUCCESS=false
 
     while [ $PET_RETRY_COUNT -lt $PET_MAX_RETRIES ]; do
+      set +e
       PET_RESULT=$(cast send "$CONTRACT" \
         "interact(uint256[])" \
         "[$GOTCHI_ID]" \
         --rpc-url "$RPC_URL" \
         --private-key "$PRIVATE_KEY" 2>&1)
-
       PET_EXIT=$?
+      set -e
 
       if [ $PET_EXIT -eq 0 ]; then
-        echo "  🦞 Pet complete! Transaction:" >> "$LOG_FILE"
+        PET_SUCCESS=true
+        echo "  🦞 Pet complete\! Transaction:" >> "$LOG_FILE"
         echo "$PET_RESULT" | grep -i "transactionHash\|status" >> "$LOG_FILE"
         break
       fi
@@ -103,7 +122,7 @@ for GOTCHI_ID in $GOTCHI_IDS; do
       fi
     done
 
-    if [ $PET_EXIT -ne 0 ]; then
+    if [ "$PET_SUCCESS" \!= "true" ]; then
       echo "  ❌ Failed to pet after $PET_MAX_RETRIES attempts" >> "$LOG_FILE"
       echo "  Last error: $PET_RESULT" >> "$LOG_FILE"
     fi
