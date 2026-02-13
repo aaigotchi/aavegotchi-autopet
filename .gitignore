@@ -5,3 +5,7 @@ config.json
 .env
 secrets/
 *.gpg
+
+# OpenClaw metadata (do not commit)
+.clawhub/
+_meta.json
