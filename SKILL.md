@@ -46,3 +46,12 @@ Calls the `interact(uint256[] tokenIds)` function on the Aavegotchi contract to 
 ⚠️ **NEVER commit your private key to git!**
 
 Store your private key securely in the config file or use environment variables.
+
+## Optional: Integrate Coinbase CDP Server Wallet (No privateKey in .env)
+
+This skill currently runs with private-key-based scripts in this repo.
+
+For an optional hardened integration path that keeps existing cooldown logic but swaps signing to CDP Server Wallet, see:
+- `CDP_INTEGRATION.md`
+
+This is integration guidance only. Current script behavior is unchanged.

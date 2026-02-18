@@ -4,5 +4,10 @@
   "gotchiIds": ["9638", "1234"],
   "rpcUrl": "https://mainnet.base.org",
   "privateKeyEncrypted": true,
-  "privateKeyPath": "~/.openclaw/secrets/aavegotchi-private-key.gpg"
+  "privateKeyPath": "~/.openclaw/secrets/aavegotchi-private-key.gpg",
+  "_cdpIntegrationNote": {
+    "status": "docs_only_optional",
+    "guide": "See CDP_INTEGRATION.md to integrate Coinbase CDP Server Wallet as an alternative signing backend.",
+    "important": "Current runtime scripts in this repo still use privateKeyPath/privateKeyEncrypted unless you implement the wrapper workflow from the guide."
+  }
 }
