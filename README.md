@@ -241,3 +241,12 @@ This skill is experimental and unaudited. Use at your own risk. Not financial ad
 - You're probably too deep in the gotchiverse already
 
 *Stay based, fren* 🦞✨
+
+## Optional Secure Alternative: Coinbase CDP Server Wallet
+
+Current scripts in this repo still use the private-key-path signing flow.
+
+If you want to integrate CDP Server Wallet as a hardened alternative (no raw private key in `.env`, policy allowlists, prepare/execute pattern), see:
+- `CDP_INTEGRATION.md`
+
+This is documentation-only guidance and not a hard migration of existing scripts.
